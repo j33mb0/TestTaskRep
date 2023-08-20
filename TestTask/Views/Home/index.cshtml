@@ -1,0 +1,216 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title>Metanit.com</title>
+    <style>
+        /* Стили для чата */
+
+
+
+        .chat-container {
+            width: 600px;
+            height: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            border: 1px solid #ccc;
+            overflow: auto;
+            background-color: #FFF0EC;
+        }
+
+
+
+        .message-block {
+            display: flex;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+    </style>
+</head>
+<body>
+    <div id="nickNamePanel">
+        <p id="nickName-block" style="display:none"></p>
+        <input type="text" id="nickname-input" placeholder="Введите никнейм..." />
+        <button id="authorize-button" onclick="authorize()">Логин</button>
+    </div>
+    <div id="userMessageContainer">
+        <button id="showLastMessages" style="display:none">Показать последние сообщения</button>
+        <div id="usermessages-container" class="usermessages-container" style="display:none">
+            
+        </div>
+    </div>
+
+
+    <div id="chatroom"></div>
+    <div class="chat-container" style="display:none">
+        
+    </div>
+    <div class="message-block">
+        <input type="text" id="message-input"  style="display:none" placeholder="Введите сообщение...">
+        <button id="send-button"  style="display:none" onclick="sendMessage()">Отправить</button>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/6.0.1/signalr.js"></script>
+    <script>
+        var nickName = "";
+        const hubConnection = new signalR.HubConnectionBuilder()
+            .withUrl("/chat")
+            .build();
+
+        document.addEventListener("DOMContentLoaded", async function() {
+            const response = await fetch("/GetMessagesForContentLoadig", 
+            {
+                method: "GET",
+                headers: { "Accept": "Application/json"}
+            });
+            if(response.ok === true)
+            {
+                const messages = await response.json();
+                messages.forEach(message => addNewMessageInChatContainer(message));
+                console.log("mes ok");
+            }
+            else 
+            {
+                console.log("mes not ok");
+            }
+        });
+
+        document.getElementById('showLastMessages').addEventListener('click', function() {
+            var contentDiv = document.getElementById('usermessages-container');
+            var mesButton = document.getElementById('showLastMessages');
+
+            if (contentDiv.style.display === 'none') {
+                contentDiv.style.display = 'block';
+                mesButton.textContent = "Скрыть последние сообщения";
+            } else {
+                contentDiv.style.display = 'none';
+                mesButton.textContent = "Показать последние сообщения";
+            };
+        });
+
+        // получение данных с сервера
+        hubConnection.on("Receive", function (message) {
+            addNewMessageInChatContainer(message);
+        });
+
+        hubConnection.start()
+            .then(function () {
+                document.getElementById("send-button").disabled = false;
+            })
+            .catch(function (err) {
+                return console.error(err.toString());
+            });
+
+        async function authorize() {
+            const chatcontainer = document.getElementsByClassName('chat-container');
+            const messageInput = document.getElementById('message-input');
+            const sendButton = document.getElementById('send-button');
+            const nicknameInput = document.getElementById('nickname-input');
+            const authorizeButton = document.getElementById('authorize-button');
+            const nickNameBlock = document.getElementById('nickName-block');
+            const nickNameText = nicknameInput.value;
+            const lastMessageButton = document.getElementById('showLastMessages');
+
+
+            nickName = nickNameText;
+            nickNameBlock.textContent += nickNameText;
+            nickNameBlock.style.display = "block";
+
+            nicknameInput.style.display = "none";
+            authorizeButton.style.display = "none";
+            chatcontainer[0].style.display = "block";
+            messageInput.style.display = "block";
+            sendButton.style.display = "block";
+            lastMessageButton.style.display = "block";
+
+            const path = '/GetUserMessages/';
+            const response = await fetch(path.concat(nickName), 
+            {
+                method: "GET",
+                headers: { "Accept": "Application/json"},
+            });
+            if(response.ok === true)
+            {
+                const messages = await response.json();
+                messages.forEach(message => addNewMessageInUserLastMessagesContainer(message));
+                console.log("mes ok");
+            }
+            else 
+            {
+                console.log("mes not ok");
+            }
+        }
+
+
+        async function sendMessage() {
+            const messageInput = document.getElementById('message-input');
+            const messageText = messageInput.value;
+            var currentTime = new Date();
+            var currentTimeString = currentTime.toISOString();
+
+            const response = await fetch("/SendMessage", {
+                method: "POST",
+                headers: { "Accept": "application/json", "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    userName: nickName,
+                    text: messageText
+                })
+            });
+            if(response.ok === true)
+            {
+                const mes = await response.json();
+                hubConnection.invoke("Send", mes).catch(function (err) {
+                    return console.error(err.toString());
+                });
+                addNewMessageInUserLastMessagesContainer(mes)
+            }
+
+        }
+
+        function addNewMessageInChatContainer(message)
+        {
+            const message_id = message.id;
+            const message_userName = message.userName;
+            const message_text = message.text;
+            const message_time = message.time;
+
+            var result = message_id + " | " + message_userName + " | " + message_text + " | " + message_time;
+
+            const messageBox = document.createElement('div');
+            messageBox.className = 'message-box';
+            messageBox.textContent = result;
+
+
+            const chatContainer = document.querySelector('.chat-container');
+            chatContainer.appendChild(messageBox);
+        }
+
+        function addNewMessageInUserLastMessagesContainer(message)
+        {
+            const message_id = message.id;
+            const message_userName = message.userName;
+            const message_text = message.text;
+            const message_time = message.time;
+
+            var result = message_id + " | " + message_userName + " | " + message_text + " | " + message_time;
+
+            const messageBox = document.createElement('div');
+            messageBox.className = 'message-box';
+            messageBox.textContent = result;
+
+
+            const lastMessageContainer = document.querySelector('.usermessages-container');
+            lastMessageContainer.appendChild(messageBox);
+        }
+
+        class message{
+            id;
+            userName;
+            text;
+            time;
+        }
+    </script>
+</body>
+</html>
